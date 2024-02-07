@@ -184,6 +184,7 @@ impl Lexer {
 			'%' => Operator::Mod,
 			',' => Operator::Comma,
 			'.' => Operator::Dot,
+			':' => Operator::Colon,
 			'>' => Operator::Greater,
 			'<' => Operator::Less,
 			'=' => Operator::Assignment,

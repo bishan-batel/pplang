@@ -1,6 +1,6 @@
 use test_case::test_case;
 use crate::parser::lexer;
-use crate::parser::token::{Keyword, Literal, Operator, Token};
+use crate::parser::token::{Keyword, Literal, Operator, Parenthetical, Token};
 
 #[test_case("function", Keyword::Function; "Function Keyword")]
 #[test_case("return", Keyword::Return; "Return Keyword")]
@@ -70,6 +70,7 @@ fn float_literals(contents: &str, idents: &[f64]) -> lexer::Result<()> {
 	Ok(())
 }
 
+#[test_case(":", & [Operator::Colon]; "Colon Operator")]
 #[test_case("+", & [Operator::Add]; "Add Operator")]
 #[test_case("-", & [Operator::Minus]; "Minus Operator")]
 #[test_case("*", & [Operator::Multiply]; "Multiply Operator")]
@@ -119,15 +120,30 @@ fn operators_simple(contents: &str, expected: &[Operator]) -> lexer::Result<()> 
 }
 
 #[test]
-fn general_program() -> lexer::Result<()> {
+fn program_is_even() -> lexer::Result<()> {
 	const CONTENTS: &str = r#"
-		function bruh
+		function is_even(n: i32) {
+			return n % 2 == 0
+		}
  "#;
 
 	let tokens = lexer::tokenize(CONTENTS.to_string())?;
 	let expected = vec![
 		Keyword::Function.into(),
-		Token::Identifier("bruh".into()),
+		Token::Identifier("is_even".into()),
+		Parenthetical::NormalOpen.into(),
+		Token::Identifier("n".into()),
+		Operator::Colon.into(),
+		Token::Identifier("i32".into()),
+		Parenthetical::NormalClose.into(),
+		Parenthetical::CurlyOpen.into(),
+		Keyword::Return.into(),
+		Token::Identifier("n".into()),
+		Operator::Mod.into(),
+		Literal::Integer(2).into(),
+		Operator::Equals.into(),
+		Literal::Integer(0).into(),
+		Parenthetical::CurlyClose.into(),
 	];
 
 	assert_eq!(tokens, expected);

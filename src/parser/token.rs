@@ -65,6 +65,7 @@ pub enum Operator {
 	Mod,
 	Comma,
 	Dot,
+	Colon,
 
 	Equals,
 	Greater,
