@@ -1,6 +1,41 @@
 use std::fmt::{Debug};
 
 #[derive(Debug, Clone, PartialEq)]
+#[allow(clippy::module_name_repetitions)]
+pub struct TracedToken {
+	pub(crate) token: Token,
+	pub(crate) trace: Trace,
+}
+
+impl From<TracedToken> for Token {
+	fn from(value: TracedToken) -> Self {
+		value.token
+	}
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct FilePos {
+	pub row: usize,
+	pub column: usize,
+}
+
+impl FilePos {
+	pub const fn beginning() -> Self {
+		Self {
+			row: 0,
+			column: 0,
+		}
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Trace {
+	pub source_file: String,
+	pub begin_pos: FilePos,
+	pub end_pos: FilePos,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Token {
 	Keyword(Keyword),
 	Operator(Operator),
@@ -67,6 +102,8 @@ pub enum Operator {
 	Dot,
 	Colon,
 
+	Reference,
+
 	Equals,
 	Greater,
 	GreaterOrEquals,
@@ -99,6 +136,7 @@ pub enum Keyword {
 	Let,
 	Var,
 	In,
+	As,
 }
 
 
@@ -121,6 +159,7 @@ impl TryFrom<&str> for Keyword {
 			"let" => Self::Let,
 			"var" => Self::Var,
 			"in" => Self::In,
+			"as" => Self::As,
 			_ => return Err(())
 		})
 	}

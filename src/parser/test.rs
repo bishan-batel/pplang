@@ -15,7 +15,7 @@ fn keyword(contents: &str, keyword: Keyword) -> lexer::Result<()> {
 	let tokens = lexer::tokenize(contents)?;
 
 	assert_eq!(tokens.len(), 1);
-	assert_eq!(tokens[0], Token::Keyword(keyword));
+	assert_eq!(tokens[0].token, Token::Keyword(keyword));
 
 	Ok(())
 }
@@ -30,8 +30,8 @@ fn identifier(contents: &str, idents: &[&'static str]) -> lexer::Result<()> {
 
 	assert_eq!(tokens.len(), idents.len());
 
-	for (token, ident) in tokens.into_iter().zip(idents.iter()) {
-		assert_eq!(token, Token::Identifier((*ident).into()));
+	for (tt, ident) in tokens.into_iter().zip(idents.iter()) {
+		assert_eq!(tt.token, Token::Identifier((*ident).into()));
 	}
 
 	Ok(())
@@ -47,8 +47,8 @@ fn int_literals(contents: &str, idents: &[i64]) -> lexer::Result<()> {
 	let tokens = lexer::tokenize(contents)?;
 
 	assert_eq!(tokens.len(), idents.len());
-	for (token, literal) in tokens.into_iter().zip(idents.iter()) {
-		assert_eq!(token, Token::Literal(Literal::Integer(*literal)));
+	for (tt, literal) in tokens.into_iter().zip(idents.iter()) {
+		assert_eq!(tt.token, Token::Literal(Literal::Integer(*literal)));
 	}
 
 	Ok(())
@@ -63,8 +63,8 @@ fn float_literals(contents: &str, idents: &[f64]) -> lexer::Result<()> {
 	let tokens = lexer::tokenize(contents)?;
 
 	assert_eq!(tokens.len(), idents.len());
-	for (token, literal) in tokens.into_iter().zip(idents.iter()) {
-		assert_eq!(token, Token::Literal(Literal::Float(*literal)));
+	for (tt, literal) in tokens.into_iter().zip(idents.iter()) {
+		assert_eq!(tt.token, Token::Literal(Literal::Float(*literal)));
 	}
 
 	Ok(())
@@ -90,7 +90,8 @@ fn float_literals(contents: &str, idents: &[f64]) -> lexer::Result<()> {
 #[test_case("xor", & [Operator::Xor]; "Xor Operator")]
 #[test_case("->", & [Operator::ThinArrow]; "ThinArrow Operator")]
 #[test_case("=>", & [Operator::Arrow]; "Arrow Operator")]
-#[test_case("+ - % > <= > and or -> => = > , . xor", & [
+#[test_case("&", & [Operator::Reference]; "Reference Operator")]
+#[test_case("+ - % > <= > and or -> => = > , . xor &", & [
 Operator::Add,
 Operator::Minus,
 Operator::Mod,
@@ -105,15 +106,45 @@ Operator::Assignment,
 Operator::Greater,
 Operator::Comma,
 Operator::Dot,
-Operator::Xor];
+Operator::Xor,
+Operator::Reference];
 "All Operators")]
 fn operators_simple(contents: &str, expected: &[Operator]) -> lexer::Result<()> {
 	let contents = contents.to_string();
 	let tokens = lexer::tokenize(contents)?;
 
 	assert_eq!(tokens.len(), expected.len());
-	for (token, operator) in tokens.into_iter().zip(expected.iter()) {
-		assert_eq!(token, (*operator).into());
+	for (tt, operator) in tokens.into_iter().zip(expected.iter()) {
+		assert_eq!(tt.token, (*operator).into());
+	}
+
+	Ok(())
+}
+
+#[test_case(r#" "hello world" "#, & ["hello world"]; "String Literal")]
+#[test_case(r#" "wha \\ moment ' \" " "\n""#, & [r#"wha \ moment ' " "#, "\n"]; "String Literal with Escape")]
+#[test_case(r#" "\u0289 bruh" "#, & ["\u{289} bruh"]; "String Literal with unicode escape")]
+fn string_literal(contents: &str, expected: &[&'static str]) -> lexer::Result<()> {
+	let contents = contents.to_string();
+	let tokens = lexer::tokenize(contents)?;
+
+	assert_eq!(tokens.len(), expected.len());
+	for (tt, operator) in tokens.into_iter().zip(expected.iter()) {
+		assert_eq!(tt.token, Literal::String((*operator).into()).into());
+	}
+
+	Ok(())
+}
+
+#[test_case(r#" 'a' "#, & ['a']; "Char Literal")]
+#[test_case(r#" '\u0050' '\n'"#, & ['\u{50}', '\n']; "Char literal with escape")]
+fn char_literal(contents: &str, expected: &[char]) -> lexer::Result<()> {
+	let contents = contents.to_string();
+	let tokens = lexer::tokenize(contents)?;
+
+	assert_eq!(tokens.len(), expected.len());
+	for (tt, operator) in tokens.into_iter().zip(expected.iter()) {
+		assert_eq!(tt.token, Literal::Character(*operator).into());
 	}
 
 	Ok(())
@@ -145,6 +176,8 @@ fn program_is_even() -> lexer::Result<()> {
 		Literal::Integer(0).into(),
 		Parenthetical::CurlyClose.into(),
 	];
+
+	let tokens: Vec<_> = tokens.into_iter().map(|x| x.token).collect();
 
 	assert_eq!(tokens, expected);
 

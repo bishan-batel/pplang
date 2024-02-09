@@ -1,16 +1,19 @@
+use serde_json::Error;
 use crate::parser::LexerError;
-use crate::parser::token::{Keyword, Literal, Operator, Parenthetical, Token};
+use crate::parser::token::{FilePos, Keyword, Literal, Operator, Parenthetical, Token, TracedToken, Trace};
 
 // const fn is kinda the same thing as a 'constexpr function'
 // where its code that , if possible, will run at compile time
 // not like a macro but
 
 pub type Result<T> = std::result::Result<T, LexerError>;
+type LexerPass = fn(&mut Lexer) -> bool;
 
 struct Lexer {
 	pos: usize,
 	contents: String,
-	tokens: Vec<Token>,
+	tokens: Vec<TracedToken>,
+	last_token_position: FilePos,
 }
 
 impl Lexer {
@@ -19,6 +22,7 @@ impl Lexer {
 			pos: 0,
 			tokens: vec![],
 			contents,
+			last_token_position: FilePos::beginning(),
 		}
 	}
 
@@ -38,15 +42,40 @@ impl Lexer {
 	fn advance_or_whitespace(&mut self) -> char {
 		self.advance().unwrap_or(' ')
 	}
+
 	fn curr_or_whitespace(&self) -> char {
 		self.curr().unwrap_or(' ')
+	}
+
+	fn push_token(&mut self, token: impl Into<Token>) {
+		let contents_to_now = &self.contents[0..self.pos.min(self.contents.len())];
+
+		let end_pos = FilePos {
+			row: contents_to_now.chars().filter(|x| *x == '\n').count(),
+			column: contents_to_now.chars().fold(1, |x, c| {
+				match c {
+					'\n' => 1,
+					_ => x + 1
+				}
+			}),
+		};
+
+		self.tokens.push(TracedToken {
+			token: token.into(),
+			trace: Trace {
+				source_file: "".to_string(),
+				begin_pos: self.last_token_position,
+				end_pos,
+			},
+		});
+		self.last_token_position = end_pos;
 	}
 
 	fn is_eof(&self) -> bool {
 		self.curr().is_none()
 	}
 
-	fn tokenize(mut self) -> Result<Vec<Token>> {
+	fn tokenize(mut self) -> Result<Vec<TracedToken>> {
 		while !self.is_eof() {
 			self.read_token()?;
 		}
@@ -55,23 +84,30 @@ impl Lexer {
 	}
 
 	fn read_token(&mut self) -> Result<()> {
-		const PASSES: &[fn(&mut Lexer) -> bool] = &[
+		const PASSES: &[LexerPass] = &[
 			Lexer::whitespace,
 			Lexer::operator_double,
 			Lexer::parenthetical,
 			Lexer::operator_simple,
 			Lexer::number_literal,
-			Lexer::string_literal,
 			Lexer::identifier
 		];
 
-		for pass in PASSES {
-			if pass(self) {
-				return Ok(());
-			}
-		}
+		// manual string pass as it is the only one that can fail
+		if self.string_literal()? { return Ok(()); }
+		if self.char_literal()? { return Ok(()); }
 
-		Err(LexerError::UnexpectedChar(self.curr_or_whitespace()))
+		if PASSES.iter().any(|x| x(self)) {
+			Ok(())
+		} else {
+			Err(LexerError::UnexpectedChar(self.curr_or_whitespace()))
+		}
+		// for pass in PASSES {
+		// 	if pass(self) {
+		// 		return Ok(());
+		// 	}
+		// }
+		// Err(LexerError::UnexpectedChar(self.curr_or_whitespace()))
 	}
 
 	fn whitespace(&mut self) -> bool {
@@ -106,30 +142,71 @@ impl Lexer {
 		// Sanitize _ bc rust parse shits itself
 		let num = num.replace('_', "");
 
-		self.tokens.push(if has_decimal {
+		self.push_token(if has_decimal {
 			let num: f64 = num.parse().expect("Failed to build float string properly");
 			Literal::Float(num)
 		} else {
 			let num: i64 = num.parse().expect("Failed to build int string properly");
 			Literal::Integer(num)
-		}.into());
+		});
 
 		true
 	}
 
-	fn string_literal(&mut self) -> bool {
-		if self.curr_or_whitespace() != '"' { return false; }
+	fn char_literal(&mut self) -> Result<bool> {
+		if self.curr_or_whitespace() != '\'' { return Ok(false); }
 
-		let mut string = String::new();
+		let mut literal = String::new();
 
-		while !self.is_eof() && self.advance_or_whitespace() != '"' {
-			string.push(self.curr_or_whitespace());
+		while self.advance_or_whitespace() != '\'' {
+			if self.is_eof() { return Err(LexerError::UnterminatedLiteral(literal)); }
+
+			let curr = self.curr_or_whitespace();
+			literal.push(curr);
+			if curr == '\\' {
+				if let Some(curr) = self.advance() {
+					literal.push(curr);
+				}
+			}
 		}
 		self.advance();
 
-		self.tokens.push(Literal::String(string).into());
+		let char_literal: String = serde_json::from_str(&format!(r#""{literal}""#))
+			.map_err(|x| LexerError::InvalidLiteral(literal, x))?;
 
-		true
+		if char_literal.len() > 1 {
+			return Err(LexerError::LongCharacterLiteral(char_literal));
+		}
+
+		let char_literal = char_literal.chars().nth(0).ok_or(LexerError::EmptyLiteral)?;
+
+		self.push_token(Literal::Character(char_literal));
+		Ok(true)
+	}
+
+	fn string_literal(&mut self) -> Result<bool> {
+		if self.curr_or_whitespace() != '"' { return Ok(false); }
+
+		let mut string = String::new();
+
+		while self.advance_or_whitespace() != '"' {
+			if self.is_eof() { return Err(LexerError::UnterminatedLiteral(string)); }
+
+			let curr = self.curr_or_whitespace();
+			string.push(curr);
+			if curr == '\\' {
+				if let Some(curr) = self.advance() {
+					string.push(curr);
+				}
+			}
+		}
+		self.advance();
+
+
+		let string = serde_json::from_str(&format!(r#""{string}""#)).map_err(|x| LexerError::InvalidLiteral(string, x))?;
+
+		self.push_token(Literal::String(string));
+		Ok(true)
 	}
 
 	fn identifier(&mut self) -> bool {
@@ -147,11 +224,15 @@ impl Lexer {
 		}
 
 		// Operator check, for operator keywords like 'and'
-		self.tokens.push(match identifier.as_str() {
+		self.push_token(match identifier.as_str() {
 			"and" => Operator::And.into(),
 			"or" => Operator::Or.into(),
 			"not" => Operator::Not.into(),
 			"xor" => Operator::Xor.into(),
+			"mod" => Operator::Mod.into(),
+
+			"no_cap" | "true" => Literal::Bool(true).into(),
+			"cap" | "false" => Literal::Bool(false).into(),
 
 			// if not a special character, try to find a keyword, if all else fails
 			// add a new identifier token
@@ -163,20 +244,21 @@ impl Lexer {
 	}
 
 	fn parenthetical(&mut self) -> bool {
-		self.tokens.push(match self.curr_or_whitespace() {
-			'(' => Parenthetical::NormalOpen.into(),
-			')' => Parenthetical::NormalClose.into(),
-			'[' => Parenthetical::BracketOpen.into(),
-			']' => Parenthetical::BracketClose.into(),
-			'{' => Parenthetical::CurlyOpen.into(),
-			'}' => Parenthetical::CurlyClose.into(),
+		self.push_token(match self.curr_or_whitespace() {
+			'(' => Parenthetical::NormalOpen,
+			')' => Parenthetical::NormalClose,
+			'[' => Parenthetical::BracketOpen,
+			']' => Parenthetical::BracketClose,
+			'{' => Parenthetical::CurlyOpen,
+			'}' => Parenthetical::CurlyClose,
 			_ => return false
 		});
 		self.advance();
 		true
 	}
+
 	fn operator_simple(&mut self) -> bool {
-		self.tokens.push(Token::Operator(match self.curr_or_whitespace() {
+		self.push_token(match self.curr_or_whitespace() {
 			'+' => Operator::Add,
 			'-' => Operator::Minus,
 			'*' => Operator::Multiply,
@@ -188,8 +270,9 @@ impl Lexer {
 			'>' => Operator::Greater,
 			'<' => Operator::Less,
 			'=' => Operator::Assignment,
+			'&' => Operator::Reference,
 			_ => return false
-		}));
+		});
 		self.advance();
 		true
 	}
@@ -199,14 +282,14 @@ impl Lexer {
 
 		if slice.len() != 2 { return false; }
 
-		self.tokens.push(Token::Operator(match slice {
+		self.push_token(match slice {
 			"==" => Operator::Equals,
 			">=" => Operator::GreaterOrEquals,
 			"<=" => Operator::LessOrEquals,
 			"->" => Operator::ThinArrow,
 			"=>" => Operator::Arrow,
 			_ => return false
-		}));
+		});
 
 		self.advance();
 		self.advance();
@@ -215,6 +298,6 @@ impl Lexer {
 	}
 }
 
-pub fn tokenize(contents: String) -> Result<Vec<Token>> {
+pub fn tokenize(contents: String) -> Result<Vec<TracedToken>> {
 	Lexer::new(contents).tokenize()
 }

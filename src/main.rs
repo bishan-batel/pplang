@@ -1,4 +1,5 @@
 mod parser;
+mod intepreter;
 
 use std::path::{PathBuf};
 use clap::Parser;
@@ -18,7 +19,7 @@ enum ArgumentError {
 	CouldNotOpenFile,
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> anyhow::Result<()> {
 	let args = Args::parse();
 
 	if !args.path.exists() {
