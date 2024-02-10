@@ -12,7 +12,7 @@ mod test;
 pub enum TopLevelStatement {
 	Function {
 		ident: Identifier,
-		signature: Function,
+		function: Function,
 	},
 	GlobalVariable {
 		global: Variable
@@ -26,6 +26,7 @@ pub enum Statement {
 		var: Variable,
 		initialisation: Option<Expression>,
 	},
+	Return(Expression),
 }
 
 impl From<Expression> for Statement {
@@ -49,25 +50,30 @@ pub enum Expression {
 		from: Box<Expression>,
 		to: Type,
 	},
-	Literal(Literal),
 	FunctionCall {
-		ident: Identifier,
+		function: Box<Expression>,
 		arguments: Vec<Expression>,
 	},
-	VariableReference(Identifier),
-	Lambda(Function),
-	Scope {
-		expressions: Vec<Expression>
-	},
+	ObjectReference(Identifier),
 	ArrayAccess {
 		expr: Box<Expression>,
 		index: Box<Expression>,
 	},
+	Literal(Literal),
+	Lambda(Function),
+	Scope(Vec<Statement>),
 }
 
-
-impl From<Literal> for Expression {
-	fn from(value: Literal) -> Self {
-		Self::Literal(value)
+impl From<Identifier> for Expression {
+	fn from(value: Identifier) -> Self {
+		Self::ObjectReference(value)
 	}
 }
+
+impl From<Function> for Expression {
+	fn from(value: Function) -> Self {
+		Self::Lambda(value)
+	}
+}
+
+

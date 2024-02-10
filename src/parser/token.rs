@@ -1,4 +1,8 @@
 use std::fmt::{Debug};
+use crate::parser::ast::Expression;
+use crate::parser::ast::variable::Identifier;
+
+pub type TracedTokenList = Vec<TracedToken>;
 
 #[derive(Debug, Clone, PartialEq)]
 #[allow(clippy::module_name_repetitions)]
@@ -40,8 +44,15 @@ pub enum Token {
 	Keyword(Keyword),
 	Operator(Operator),
 	Parenthetical(Parenthetical),
-	Identifier(String),
+	Identifier(Identifier),
 	Literal(Literal),
+	EOF,
+}
+
+impl From<Identifier> for Token {
+	fn from(value: Identifier) -> Self {
+		Self::Identifier(value)
+	}
 }
 
 
@@ -52,9 +63,16 @@ pub enum Literal {
 	Integer(i64),
 	Float(f64),
 	Bool(bool),
+	Unit,
 }
 
 impl From<Literal> for Token {
+	fn from(value: Literal) -> Self {
+		Self::Literal(value)
+	}
+}
+
+impl From<Literal> for Expression {
 	fn from(value: Literal) -> Self {
 		Self::Literal(value)
 	}
@@ -78,7 +96,6 @@ impl Parenthetical {
 			(Self::CurlyOpen, Self::CurlyClose)
 		)
 	}
-
 	const fn is_opener_for(self, closing: Self) -> bool {
 		closing.is_closer_for(self)
 	}
@@ -90,26 +107,29 @@ impl From<Parenthetical> for Token {
 	}
 }
 
-
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Operator {
 	Add,
 	Minus,
-	Multiply,
+	Star,
 	Divide,
 	Mod,
 	Comma,
 	Dot,
 	Colon,
+	SemiColon,
 
 	Reference,
 
 	Equals,
+	NotEquals,
 	Greater,
 	GreaterOrEquals,
 	Less,
 	LessOrEquals,
 	Assignment,
+	ShiftLeft,
+	ShiftRight,
 
 	And,
 	Or,
@@ -137,8 +157,8 @@ pub enum Keyword {
 	Var,
 	In,
 	As,
+	Const,
 }
-
 
 impl From<Keyword> for Token {
 	fn from(value: Keyword) -> Self {
@@ -159,6 +179,7 @@ impl TryFrom<&str> for Keyword {
 			"let" => Self::Let,
 			"var" => Self::Var,
 			"in" => Self::In,
+			"const" => Self::Const,
 			"as" => Self::As,
 			_ => return Err(())
 		})

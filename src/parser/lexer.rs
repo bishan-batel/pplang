@@ -1,6 +1,6 @@
 use serde_json::Error;
 use crate::parser::LexerError;
-use crate::parser::token::{FilePos, Keyword, Literal, Operator, Parenthetical, Token, TracedToken, Trace};
+use crate::parser::token::{FilePos, Keyword, Literal, Operator, Parenthetical, Token, TracedToken, Trace, TracedTokenList};
 
 // const fn is kinda the same thing as a 'constexpr function'
 // where its code that , if possible, will run at compile time
@@ -12,7 +12,7 @@ type LexerPass = fn(&mut Lexer) -> bool;
 struct Lexer {
 	pos: usize,
 	contents: String,
-	tokens: Vec<TracedToken>,
+	tokens: TracedTokenList,
 	last_token_position: FilePos,
 }
 
@@ -75,7 +75,7 @@ impl Lexer {
 		self.curr().is_none()
 	}
 
-	fn tokenize(mut self) -> Result<Vec<TracedToken>> {
+	fn tokenize(mut self) -> Result<TracedTokenList> {
 		while !self.is_eof() {
 			self.read_token()?;
 		}
@@ -237,7 +237,7 @@ impl Lexer {
 			// if not a special character, try to find a keyword, if all else fails
 			// add a new identifier token
 			_ => Keyword::try_from(identifier.as_str())
-				.map_or(Token::Identifier(identifier), Token::Keyword)
+				.map_or(Token::Identifier(identifier.into()), Token::Keyword)
 		});
 
 		true
@@ -261,12 +261,13 @@ impl Lexer {
 		self.push_token(match self.curr_or_whitespace() {
 			'+' => Operator::Add,
 			'-' => Operator::Minus,
-			'*' => Operator::Multiply,
+			'*' => Operator::Star,
 			'/' => Operator::Divide,
 			'%' => Operator::Mod,
 			',' => Operator::Comma,
 			'.' => Operator::Dot,
 			':' => Operator::Colon,
+			';' => Operator::SemiColon,
 			'>' => Operator::Greater,
 			'<' => Operator::Less,
 			'=' => Operator::Assignment,
@@ -284,10 +285,13 @@ impl Lexer {
 
 		self.push_token(match slice {
 			"==" => Operator::Equals,
+			"!=" => Operator::NotEquals,
 			">=" => Operator::GreaterOrEquals,
 			"<=" => Operator::LessOrEquals,
 			"->" => Operator::ThinArrow,
 			"=>" => Operator::Arrow,
+			"<<" => Operator::ShiftLeft,
+			">>" => Operator::ShiftRight,
 			_ => return false
 		});
 
@@ -298,6 +302,6 @@ impl Lexer {
 	}
 }
 
-pub fn tokenize(contents: String) -> Result<Vec<TracedToken>> {
+pub fn tokenize(contents: String) -> Result<TracedTokenList> {
 	Lexer::new(contents).tokenize()
 }

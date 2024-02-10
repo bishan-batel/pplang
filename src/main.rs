@@ -1,5 +1,10 @@
+#![cfg_attr(debug_assertions, allow(unused))]
+
+// #![no_std]
+
+
 mod parser;
-mod intepreter;
+mod interpreter;
 
 use std::path::{PathBuf};
 use clap::Parser;
@@ -22,13 +27,14 @@ enum ArgumentError {
 fn main() -> anyhow::Result<()> {
 	let args = Args::parse();
 
+
+	let a: Vec<_> = vec![10];
+
 	if !args.path.exists() {
 		Err(ArgumentError::FileNotFound)?;
 	}
 
 	println!("Parsing file {:#?}", args.path.as_path());
-
-	// we have a tree_entered virtual method u can override, as well as a on_tree_entered signal
 
 	if let Ok(contents) = std::fs::read_to_string(args.path) {
 		parser::parse(contents)?;

@@ -1,13 +1,24 @@
 use std::fmt::{Display, Formatter, Write};
-use crate::parser::ast::Expression;
+use std::hash::{Hash, Hasher};
+use crate::parser::ast::{Expression, Statement};
 use crate::parser::ast::variable::{Type, Variable};
 
-#[derive(Debug, Hash, PartialEq, Eq, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(clippy::module_name_repetitions)]
 pub struct FunctionSignature {
 	args: Vec<Variable>,
 	returns: Type,
 }
+
+impl Hash for FunctionSignature {
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		self.returns.hash(state);
+		for arg in &self.args {
+			arg.get_type().hash(state);
+		}
+	}
+}
+
 
 impl FunctionSignature {
 	pub const fn new_named(args: Vec<Variable>, returns: Type) -> Self {
@@ -15,7 +26,7 @@ impl FunctionSignature {
 	}
 
 	pub fn new(args: Vec<Type>, returns: Type) -> Self {
-		Self::new_named(args.into_iter().map(|x| { Variable::new("".into(), x) }).collect(), returns)
+		Self::new_named(args.into_iter().map(|x| { Variable::new("", x) }).collect(), returns)
 	}
 
 	pub fn as_type(&self) -> Type {
@@ -50,6 +61,6 @@ impl Display for FunctionSignature {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Function {
-	signature: FunctionSignature,
-	body: Box<Expression>,
+	pub signature: FunctionSignature,
+	pub body: Box<Expression>,
 }

@@ -1,5 +1,6 @@
 use std::fmt;
 use std::fmt::Formatter;
+use crate::parser::ast::Expression;
 use crate::parser::ast::function::FunctionSignature;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
@@ -20,6 +21,12 @@ impl From<&'static str> for Identifier {
 impl From<Identifier> for String {
 	fn from(value: Identifier) -> Self {
 		value.0
+	}
+}
+
+impl From<&'static str> for Expression {
+	fn from(value: &'static str) -> Self {
+		Identifier(value.into()).into()
 	}
 }
 
@@ -55,11 +62,11 @@ impl fmt::Display for Type {
 }
 
 impl Type {
-	pub fn custom(name: Identifier) -> Self {
-		Self::template(name, vec![])
+	pub fn custom(name: impl Into<Identifier>) -> Self {
+		Self::template(name.into(), vec![])
 	}
-	pub fn template(name: Identifier, template_args: Vec<Self>) -> Self {
-		Self::Custom { name, template_args }
+	pub fn template(name: impl Into<Identifier>, template_args: Vec<Self>) -> Self {
+		Self::Custom { name: name.into(), template_args }
 	}
 
 	pub fn as_array(&self, length: usize) -> Self {
@@ -75,7 +82,7 @@ impl Type {
 
 	pub fn as_const(&self) -> Self {
 		match self {
-			Self::Const(ty) => ty.as_const(),
+			Self::Const(ty) => self.clone(),
 			ty => Self::Const(Box::new(ty.clone()))
 		}
 	}
@@ -163,6 +170,8 @@ impl From<Identifier> for Type {
 			"u8" => Self::U8,
 			"f32" => Self::F32,
 			"f64" => Self::F64,
+			"unit" => Self::Unit,
+			"usize" => Self::USize,
 			name => Self::Custom {
 				name: name.to_string().into(),
 				template_args: vec![],
@@ -178,8 +187,8 @@ pub struct Variable {
 }
 
 impl Variable {
-	pub const fn new(ident: Identifier, type_id: Type) -> Self {
-		Self { ident, type_id }
+	pub fn new(ident: impl Into<Identifier>, type_id: Type) -> Self {
+		Self { ident: ident.into(), type_id }
 	}
 
 	pub const fn get_name(&self) -> &Identifier {
