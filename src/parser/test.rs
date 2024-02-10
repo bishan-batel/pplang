@@ -1,5 +1,9 @@
 use test_case::test_case;
+use crate::parser;
+use crate::parser::ast::variable::Type;
+use crate::parser::context::TokenStream;
 use crate::parser::lexer;
+use crate::parser::pass::category;
 use crate::parser::token::{Keyword, Literal, Operator, Parenthetical, Token};
 
 #[test_case("function", Keyword::Function; "Function Keyword")]
@@ -73,7 +77,7 @@ fn float_literals(contents: &str, idents: &[f64]) -> lexer::Result<()> {
 #[test_case(":", & [Operator::Colon]; "Colon Operator")]
 #[test_case("+", & [Operator::Add]; "Add Operator")]
 #[test_case("-", & [Operator::Minus]; "Minus Operator")]
-#[test_case("*", & [Operator::Multiply]; "Multiply Operator")]
+#[test_case("*", & [Operator::Star]; "Multiply Operator")]
 #[test_case("/", & [Operator::Divide]; "Divide Operator")]
 #[test_case("%", & [Operator::Mod]; "Mod Operator")]
 #[test_case(",", & [Operator::Comma]; "Comma Operator")]
